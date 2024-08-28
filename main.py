@@ -4,6 +4,8 @@ import argparse, sys
 import os
 import gzip
 from collections import defaultdict
+# This module provides a high-level interface for asynchronously executing callables
+from concurrent.futures import ThreadPoolExecutor
 
 HOST = '127.0.0.1'
 PORT = 4221
@@ -31,27 +33,20 @@ def undefined_route_handler(self):
 
 
 def main():
-    # Create a new socket with the provided address family, socket type and protocol number, the values given are the default ones,
-    # it's unnecessary to provide them, it's just to be explicit
-    # server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # server_address = (HOST, PORT)
-    # Binds the socket to the address composed by the host and the port, the socket must not be already bound
-    # server_socket.bind(server_address)
-    # Enables the server socket to accept connections, basically it puts our socket into 'server mode'
-    # server_socket.listen()
-
     server_address = (HOST, PORT)
-    server_socket = socket.create_server(server_address, reuse_port=True)
-    print(f'Server listening at {HOST}:{PORT}')
-
-    while True:
-        # Accepts the incoming connection to the server socket, our server socket must be bound to an address and listening 
-        # for connections. Upon accepting a connection it returns the new socket to communicate with the newly connected client
-        # and the address of the actual client socket, that is, the address of the socket on the other end of the connection
-        socket_to_client, address = server_socket.accept()
-        print(f'New client connected from address: {address}')
-        # Creates and starts the new execution thread for the current request to support concurrent client connections
-        threading.Thread(target=lambda socket: HttpHandler(socket).handle_request(), args=(socket_to_client,)).start()
+    # The 'with' statement is used to wrap the execution of a block with methods defined by a context manager. The
+    # context manager handles the entry to, and the exit from, the desired runtime context for the execution of the
+    # block of code. Basically 'with' executes the __enter__() and __exit__() methods provided by the context manager to properly initalize
+    # and free the resources of the context manager.
+    with socket.create_server(server_address, reuse_port=False) as server_socket:
+        print(f'Server listening at {HOST}:{PORT}')
+        # ThreadPoolExecutor is an Executor subclass that uses a pool of at most max_workers threads to execute asynchronous calls,
+        # when max_workers is None or not given, it defaults to the number of processors in the machine multiplied by 5. Basically
+        # the ThreadPoolExecutor provides a pool of reusable worker threads using the executor design pattern.
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            while True:
+                socket_to_client, address = server_socket.accept()
+                executor.submit(lambda socket: HttpHandler(socket).handle_request(), socket_to_client)
 
 
 class Request:
